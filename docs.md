@@ -1,4 +1,4 @@
-# SCOMP Arithmetic Coprocessor — Project Documentation
+# SCOMP Arithmetic Coprocessor
 
 ## Overview
 This project implements a simple peripheral arithmetic coprocessor for the SCOMP architecture that performs four hardware-accelerated operations: 16x16 multiplication, 16÷16 division, integer square root, and CORDIC sine/cosine. These operations run much faster than their software equivalents and require no modification to the SCOMP core. All interaction occurs through the reserved I/O window 0x90–0x9F.
@@ -28,28 +28,27 @@ General rules:
 - Signed/unsigned toggle for MUL and DIV  
 - STATUS read clears DONE  
 
-Address map:
-
-Multiplication  
+### Address map
+#### Multiplication  
 A = 0x92  
 B = 0x93  
 LO = 0x94  
 HI = 0x95  
 CTRL/STATUS = 0x90
 
-Division  
+#### Division  
 NUM = 0x92  
 DEN = 0x93  
 QUO = 0x96  
 REM = 0x97  
 CTRL/STATUS = 0x90
 
-Square Root  
+#### Square Root  
 IN = 0x92  
 OUT = 0x98  
 CTRL/STATUS = 0x90
 
-CORDIC (Sine/Cosine)  
+#### CORDIC (Sine/Cosine)  
 ANG = 0x92  
 SIN = 0x99  
 COS = 0x9A  
