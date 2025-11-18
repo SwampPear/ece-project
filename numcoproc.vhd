@@ -26,8 +26,8 @@ architecture rtl of numcoproc is
     -- 0x96 : DIV_QUO
     -- 0x97 : DIV_REM
     -- 0x98 : SQRT_OUT
-    -- 0x99 : CORDIC_SIN   (currently cordic_unit output)
-    -- 0x9A : CORDIC_COS   (placeholder, currently 0)
+    -- 0x99 : CORDIC_SIN
+    -- 0x9A : CORDIC_COS
     --------------------------------------------------------------------------
 
     constant BASE_ADDR  : unsigned(10 downto 0) := to_unsigned(16#090#, 11);
@@ -47,13 +47,13 @@ architecture rtl of numcoproc is
 
     --------------------------------------------------------------------------
     -- CTRL / STATUS bits
-    -- bit 0 : START (write 1 to begin operation)
-    -- bit 1 : OP_DIV       (1 = DIV, 0 = MUL unless SQRT/CORDIC selected)
-    -- bit 2 : SIGNED       (1 = signed, 0 = unsigned) for MUL/DIV
-    -- bit 3 : OP_SQRT      (1 = SQRT)
-    -- bit 4 : OP_CORDIC    (1 = CORDIC)
+    -- bit 0 : START       (write 1 to begin operation)
+    -- bit 1 : OP_DIV      (1 = DIV, 0 = MUL unless SQRT/CORDIC selected)
+    -- bit 2 : SIGNED      (1 = signed, 0 = unsigned) for MUL/DIV
+    -- bit 3 : OP_SQRT     (1 = SQRT)
+    -- bit 4 : OP_CORDIC   (1 = CORDIC)
     --
-    -- Status bits (always reported in these positions on read of CTRL/STATUS):
+    -- Status bits (reported on CTRL read, cleared on CTRL read):
     -- ST_DONE : 0
     -- ST_BUSY : 1
     -- ST_DIV0 : 2 (set for divide-by-zero)
@@ -139,6 +139,7 @@ architecture rtl of numcoproc is
     signal cordic_sin_s  : signed(15 downto 0);
     signal cordic_valid  : std_logic;
     signal cordic_active : std_logic := '0';
+
 begin
     ----------------------------------------------------------------------
     -- Address decode and IO bus interface
@@ -154,8 +155,6 @@ begin
     ----------------------------------------------------------------------
     -- Engine instantiations
     ----------------------------------------------------------------------
-
-    -- Multiplier
     u_mul : entity work.mul_unit
         port map (
             clk       => clock,
@@ -170,7 +169,6 @@ begin
             prod_hi   => mul_hi
         );
 
-    -- Divider
     u_div : entity work.div_unit
         port map (
             clk       => clock,
@@ -185,7 +183,6 @@ begin
             remainder => div_r
         );
 
-    -- Integer square root unit
     u_sqrt : entity work.sqrt_unit
         port map (
             clk      => clock,
@@ -197,7 +194,6 @@ begin
             output   => sqrt_out_u
         );
 
-    -- CORDIC unit (sine and cosine outputs)
     u_cordic : entity work.cordic_unit
         port map (
             clk      => clock,
@@ -210,7 +206,6 @@ begin
             sin_out  => cordic_sin_s,
             valid    => cordic_valid
         );
-
 
     ----------------------------------------------------------------------
     -- Readback mux
@@ -235,7 +230,7 @@ begin
         if sel = '1' then
             case offset is
                 when OFF_CTRL =>
-                    -- Merge control bits with status bits in low positions
+                    -- Merge status bits into low positions of CTRL
                     v := reg_ctrl;
                     v(ST_DONE) := reg_status(ST_DONE);
                     v(ST_BUSY) := reg_status(ST_BUSY);
@@ -283,6 +278,7 @@ begin
     ----------------------------------------------------------------------
     process(clock, resetn)
         variable start_now : std_logic;
+        variable ctrl_val  : std_logic_vector(15 downto 0);
     begin
         if resetn = '0' then
             reg_ctrl        <= (others => '0');
@@ -316,6 +312,7 @@ begin
             cordic_start <= '0';
 
             start_now    := '0';
+            ctrl_val     := reg_ctrl;
 
             ------------------------------------------------------------------
             -- Clear DONE/DIV0 on read of CTRL/STATUS
@@ -332,6 +329,7 @@ begin
                 case offset is
                     when OFF_CTRL =>
                         reg_ctrl <= data_in;
+                        ctrl_val := data_in;
                         if ctrl_start(data_in) = '1' then
                             start_now := '1';
                         end if;
@@ -361,38 +359,33 @@ begin
                 sqrt_active   <= '0';
                 cordic_active <= '0';
 
-                if ctrl_op_sqrt(reg_ctrl) = '1' then
+                if ctrl_op_sqrt(ctrl_val) = '1' then
                     -- SQRT: uses OP_A as input
                     sqrt_start   <= '1';
                     sqrt_active  <= '1';
-                    reg_status(ST_BUSY) <= '1';
 
-                elsif ctrl_op_cordic(reg_ctrl) = '1' then
+                elsif ctrl_op_cordic(ctrl_val) = '1' then
                     -- CORDIC: OP_A as angle input
                     cordic_start   <= '1';
                     cordic_active  <= '1';
-                    reg_status(ST_BUSY) <= '1';
 
-                elsif ctrl_op_div(reg_ctrl) = '1' then
+                elsif ctrl_op_div(ctrl_val) = '1' then
                     -- DIV: NUM=OP_A, DEN=OP_B
                     if reg_op_b = x"0000" then
                         -- Divide by zero
-                        reg_status(ST_BUSY) <= '0';
                         reg_status(ST_DONE) <= '1';
                         reg_status(ST_DIV0) <= '1';
-                        reg_div_q          <= (others => '0');
-                        reg_div_r          <= (others => '0');
+                        reg_div_q           <= (others => '0');
+                        reg_div_r           <= (others => '0');
                     else
-                        div_start          <= '1';
-                        div_active         <= '1';
-                        reg_status(ST_BUSY) <= '1';
+                        div_start   <= '1';
+                        div_active  <= '1';
                     end if;
 
                 else
                     -- MUL: A=OP_A, B=OP_B
-                    mul_start          <= '1';
-                    mul_active         <= '1';
-                    reg_status(ST_BUSY) <= '1';
+                    mul_start   <= '1';
+                    mul_active  <= '1';
                 end if;
             end if;
 
@@ -403,7 +396,6 @@ begin
                 reg_mul_lo <= mul_lo;
                 reg_mul_hi <= mul_hi;
                 mul_active <= '0';
-                reg_status(ST_BUSY) <= '0';
                 reg_status(ST_DONE) <= '1';
             end if;
 
@@ -411,14 +403,12 @@ begin
                 reg_div_q  <= div_q;
                 reg_div_r  <= div_r;
                 div_active <= '0';
-                reg_status(ST_BUSY) <= '0';
                 reg_status(ST_DONE) <= '1';
             end if;
 
             if sqrt_done = '1' then
-                reg_sqrt_out        <= std_logic_vector(sqrt_out_u);
-                sqrt_active         <= '0';
-                reg_status(ST_BUSY) <= '0';
+                reg_sqrt_out <= std_logic_vector(sqrt_out_u);
+                sqrt_active  <= '0';
                 reg_status(ST_DONE) <= '1';
             end if;
 
@@ -426,14 +416,17 @@ begin
                 reg_cordic_sin <= std_logic_vector(cordic_sin_s);
                 reg_cordic_cos <= std_logic_vector(cordic_cos_s);
                 cordic_active  <= '0';
+                reg_status(ST_DONE) <= '1';
             end if;
 
             ------------------------------------------------------------------
             -- BUSY=1 whenever any engine is working
             ------------------------------------------------------------------
-            if (mul_busy = '1') or (div_busy = '1') or
-               (cordic_busy = '1') or (sqrt_active = '1') then
+            if (mul_active = '1') or (div_active = '1') or
+               (sqrt_active = '1') or (cordic_active = '1') then
                 reg_status(ST_BUSY) <= '1';
+            else
+                reg_status(ST_BUSY) <= '0';
             end if;
         end if;
     end process;
