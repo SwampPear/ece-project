@@ -1,4 +1,4 @@
-; Simple test for DIV peripheral: 15 / 5 = 3, remainder = 0
+; Test DIV peripheral: 15 / 5 = 3 (quotient), 0 (remainder)
 
         ORG &H0
 
@@ -10,29 +10,30 @@ START:
         LOADI 5            ; ACC <- 5
         OUT   &H93         ; DEN (divisor) = 5
 
-        ; --- Start division (unsigned, DIV op assumed in hardware) ---
-        ; Assumed CTRL/STATUS bits at 0x90:
-        ;   bit 0 = START (write)
-        ;   bit 1 = BUSY  (read)
-        ;   bit 2 = DONE  (read, cleared on STATUS read)
-        LOADI 1            ; START bit = 1
-        OUT   &H90         ; CTRL/STATUS write: kick off DIV
+        ; --- Start division: unsigned, OP_DIV=1, START=1 ---
+        ; CTRL bits:
+        ;   bit0 = START
+        ;   bit1 = OP_DIV
+        ;   bit2 = SIGNED (0 = unsigned here)
+        ; So CTRL = 0b...0000000000000011 = 0x0003
+        LOADI &H0003
+        OUT   &H90         ; CTRL/STATUS write: start DIV
 
 WAIT:
-        ; --- Poll BUSY until it clears ---
+        ; --- Poll BUSY (bit 1) until it clears ---
         IN    &H90         ; ACC <- STATUS
         AND   &H0002       ; mask BUSY bit (bit 1)
         JNZ   WAIT         ; keep looping while BUSY != 0
 
         ; --- Read quotient and remainder ---
-        IN    &H96         ; ACC <- QUO (quotient)
-        STORE RESULT_QUO
+        IN      &H96       ; ACC <- QUO (quotient)
+        STORE   RESULT_QUO
 
-        IN    &H97         ; ACC <- REM (remainder)
-        STORE RESULT_REM
+        IN      &H97       ; ACC <- REM (remainder)
+        STORE   RESULT_REM
 
 DONE:
-        JUMP  DONE         ; spin forever
+        JUMP DONE          ; spin forever
 
 ; ------------------------------------------------
 ; Data section
