@@ -6,11 +6,11 @@ entity cordic_unit is
 	port (
 		clk       : in  std_logic;
 		resetn    : in  std_logic;
-      start     : in  std_logic;
+    start     : in  std_logic;
 		busy      : out std_logic;
-      done      : out std_logic;
+    done      : out std_logic;
 		
-      theta_in  : in  signed(15 downto 0);
+    theta_in  : in  signed(15 downto 0);
 		cos_out   : out signed(15 downto 0);
 		sin_out   : out signed(15 downto 0);
 		valid 	 : out std_logic
