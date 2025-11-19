@@ -17,9 +17,11 @@ WAIT:   ; --- Poll until BUSY clears (or DONE sets) ---
     ; --- Read result LO/HI ---
     IN      &H94        ; ACC <- LO word (low 16 bits of product)
     STORE   RESULT_LO   ; store to memory
+    OUT Hex1
 
     IN      &H95        ; ACC <- HI word (high 16 bits of product)
     STORE   RESULT_HI
+    OUT Hex0
 
 DONE:
 	JUMP DONE
@@ -28,3 +30,7 @@ DONE:
 ORG &H100
 	RESULT_LO:  &H0000   ; expected 0x000F (15)
 	RESULT_HI: 	&H0000   ; expected 0x0000
+
+
+Hex0: EQU 004
+Hex1: EQU 005
