@@ -25,9 +25,12 @@ architecture rtl of sqrt_unit is
     signal busy_s : std_logic := '0';
     signal done_s : std_logic := '0';
 
+    -- 18-bit remainder is enough for 16-bit input (two bits per iteration)
     signal remainder : unsigned(17 downto 0) := (others => '0');
+    -- 10-bit internal root; low 8 bits are the final integer sqrt
     signal root      : unsigned(9 downto 0)  := (others => '0');
 
+    -- We do 8 iterations (two bits per iteration) for a 16-bit operand
     signal count : integer range 0 to 7 := 0;
 
     signal x_reg : unsigned(15 downto 0) := (others => '0');
@@ -36,10 +39,14 @@ begin
 
     busy   <= busy_s;
     done   <= done_s;
-    output <= ("00000000" & root(7 downto 0));   -- result in low 8 bits
+    -- Expose the 8-bit integer sqrt in the low byte, zero-extend to 16 bits
+    output <= ("00000000" & root(7 downto 0));
 
     process(clk, resetn)
         variable next_pair : unsigned(1 downto 0);
+        variable rem_v     : unsigned(17 downto 0);
+        variable root_v    : unsigned(9 downto 0);
+        variable trial_v   : unsigned(17 downto 0);
     begin
         if resetn = '0' then
             st        <= IDLE;
@@ -51,8 +58,11 @@ begin
             x_reg     <= (others => '0');
 
         elsif rising_edge(clk) then
+            -- default: DONE is a one-cycle pulse (like mul/div)
+            done_s <= '0';
 
             case st is
+
             ---------------------------------------------------------------------
             when IDLE =>
                 busy_s <= '0';
@@ -71,24 +81,32 @@ begin
 
             ---------------------------------------------------------------------
             when RUN =>
-                -- extract next two MSB bits
+                -- Extract next two MSB bits from x_reg
                 next_pair := x_reg(15 downto 14);
+                -- Shift x_reg left (drop used bits, append 00)
+                x_reg     <= x_reg(13 downto 0) & "00";
 
-                -- shift x_reg left to drop used bits
-                x_reg <= x_reg(13 downto 0) & "00";
+                -- Work with local copies for correct sequencing
+                rem_v  := remainder;
+                root_v := root;
 
-                -- shift remainder left and add next pair
-                remainder <= (remainder(15 downto 0) & next_pair);
+                -- Shift remainder left two and add next bit-pair
+                rem_v := (rem_v(15 downto 0) & next_pair);
 
-                -- trial value = (root << 2) + 1
-                if remainder >= ((root(7 downto 0) & "00") + 1) then
-                    remainder <= remainder - ((root(7 downto 0) & "00") + 1);
-                    root      <= (root(7 downto 0) & '1');
+                -- trial = (root << 2) + 1 (classic digit-by-digit sqrt)
+                trial_v := resize((root_v(7 downto 0) & "00") + 1, rem_v'length);
+
+                if rem_v >= trial_v then
+                    rem_v  := rem_v - trial_v;
+                    root_v := (root_v(7 downto 0) & '1');
                 else
-                    root      <= (root(7 downto 0) & '0');
+                    root_v := (root_v(7 downto 0) & '0');
                 end if;
 
-                -- count down
+                remainder <= rem_v;
+                root      <= root_v;
+
+                -- Count down iterations (8 total for 16-bit operand)
                 if count = 0 then
                     st <= FINISH;
                 else
@@ -98,7 +116,7 @@ begin
             ---------------------------------------------------------------------
             when FINISH =>
                 busy_s <= '0';
-                done_s <= '1';   -- stays high until next start
+                done_s <= '1';  -- one-cycle DONE pulse
                 st     <= IDLE;
 
             end case;
