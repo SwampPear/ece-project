@@ -27,8 +27,8 @@ architecture rtl of sqrt_unit is
 
     -- 18-bit remainder is enough for 16-bit input (two bits per iteration)
     signal remainder : unsigned(17 downto 0) := (others => '0');
-    -- 10-bit internal root; low 8 bits are the final integer sqrt
-    signal root      : unsigned(9 downto 0)  := (others => '0');
+    -- 9-bit internal root; low 8 bits are the final integer sqrt
+    signal root      : unsigned(8 downto 0)  := (others => '0');
 
     -- We do 8 iterations (two bits per iteration) for a 16-bit operand
     signal count : integer range 0 to 7 := 0;
@@ -45,7 +45,7 @@ begin
     process(clk, resetn)
         variable next_pair : unsigned(1 downto 0);
         variable rem_v     : unsigned(17 downto 0);
-        variable root_v    : unsigned(9 downto 0);
+        variable root_v    : unsigned(8 downto 0);
         variable trial_v   : unsigned(17 downto 0);
     begin
         if resetn = '0' then
